@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <title>Dompet Vexanium</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link href="css/materials-icon.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="css/materialize.min.css" media="screen,projection"/>
+    <link rel="icon" href="img/vexanium.webp">
+</head>
+<body class="lighten-1 grey">
+
+<div class="container" id="app">
+    <div class="row center z-depth-0"><img class="responsive-img" src="img/vex-logo.svg" alt="Vexanium"></div>
+
+    <div class="row center">
+        <div class="chip green lighten-1 waves-effect" style="cursor: pointer" v-for="(it,key,index) in balances"
+             :key="key" @click="fetchBalance(key)">
+            {{key}} {{it.value}}
+        </div>
+    </div>
+    <div class="card center">
+        <span class="card-title">Kirim</span>
+        <div class="card-content">
+            <div class="input-field">
+                <input id="dest" type="text" class="validate" maxlength="12" v-model="dest">
+                <label for="dest">Penerima</label>
+            </div>
+            <div class="input-field">
+                <input id="amount" type="number" v-model="amount">
+                <label for="amount">Jumlah</label>
+            </div>
+            <div class="input-field">
+                <input id="symbol" type="text" class="validate" v-model="symbol">
+                <label for="symbol">Simbol</label>
+            </div>
+            <div class="input-field">
+                <input id="memo" type="text" maxlength="255" v-model="memo">
+                <label for="memo">Memo</label>
+            </div>
+        </div>
+        <div class="card-action right-align">
+            <button class="btn-flat waves-effect waves-ripple" @click="confirmSend"><i class="material-icons">send</i>
+            </button>
+        </div>
+    </div>
+
+    <div class="row valign-wrapper">
+        <span class="col s10" style="font-size: medium">Riwayat</span>
+        <button class="col s2 btn waves-effect waves-ripple" @click="fetchActions"><i class="material-icons">refresh</i>
+        </button>
+    </div>
+
+    <div class="card-panel center" v-for="it in history" :key="it._id">
+        {{it.act.name}}<br>
+        <a target="_blank" :href="`https://explorer.vexanium.com/transaction/${it.trx_id}`" class="truncate">{{it.trx_id}}</a><br>
+        {{it.createdAt|date}}
+    </div>
+
+    <div id="send" class="modal">
+        <div class="modal-content">
+            <h4>Kirim</h4>
+            <p>kamu akan mengirim <span class="red-text">{{amount}} {{symbol}}</span> kepada <span class="green-text">{{dest}}</span>
+            </p>
+        </div>
+        <div class="modal-footer">
+            <a href="#" @click="send" class="modal-close waves-effect waves-green btn-flat">Oke</a>
+            <a href="#" class="modal-close waves-effect waves-red btn-flat">Batal</a>
+        </div>
+    </div>
+
+</div>
+<script src="js/materialize.min.js"></script>
+<script src="js/vue.min.js"></script>
+<script src="js/vex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/rollups/aes.js"></script>
+
+<script>
+    function decrypt(payload = '', key = '') {
+        let code = CryptoJS.AES.decrypt(payload, key);
+        return code.toString(CryptoJS.enc.Utf8);
+    }
+
+    const V = new Vue({
+        el: '#app',
+        data: {
+            vex: null,
+            vexapi: null,
+            wallet: {},
+            account: '',
+            dest: '',
+            amount: '0',
+            symbol: 'VEX',
+            memo: '',
+
+            sendModal: null,
+            history: [],
+            tokens: null,
+            balances: {}
+        },
+        mounted() {
+            this.unlock();
+            document.title = "Dompet Vexanium - " + this.account;
+            this.sendModal = M.Modal.init(document.getElementById('send'));
+
+
+            this.vex = Eos({
+                chainId: 'f9f432b1851b5c179d2091a96f593aaed50ec7466b74f89301f957a83e56ce1f',
+                httpEndpoint: 'http://209.97.162.124:8080',
+            });
+            this.vexapi = Eos.modules.api({
+                httpEndpoint: 'http://209.97.162.124:8080'
+            });
+
+            this.fetchTokens();
+            this.fetchActions();
+        },
+        methods: {
+            unlock() {
+                this.account = localStorage.getItem('account') || 'fulan';
+
+                let pin = sessionStorage.getItem('pin');
+                let raw = localStorage.getItem('wallets');
+                try {
+                    let wallets = JSON.parse(decrypt(raw, pin));
+                    this.wallet = wallets[this.account];
+                } catch (e) {
+                    M.toast({html: 'belum berhasil buka dompet'});
+                }
+            },
+            confirmSend() {
+                if (!this.dest) {
+                    M.toast({html: 'isi penerima dahulu'});
+                    return;
+                }
+                this.symbol.trim();
+                this.memo.trim();
+                this.sendModal.open();
+            },
+            send() {
+                const DecimalPad = Eos.modules.format.DecimalPad;
+                let amount = DecimalPad(this.amount, 4);
+                let data = {
+                    from: this.account,
+                    to: this.dest,
+                    quantity: `${amount} ${this.symbol}`,
+                    memo: this.memo,
+                }
+                this.vex.transfer(data, {keyProvider: this.wallet.key}).then(res => {
+                    console.log(res);
+                    let txid = res.processed.id;
+
+                    M.toast({html: 'berhasil dikirim'});
+                }).catch(e => {
+                    console.log(e);
+                    M.toast({html: 'terjadi kesalahan'});
+                });
+            },
+            fetchActions() {
+                this.vex.getActions(this.account, -1, 10).then(res => {
+                    this.history = res.actions;
+                });
+            },
+            async fetchTokens() {
+                let res = await fetch('https://explorer.vexanium.com/api/v1/get_tokens');
+                if (res.ok) {
+                    res = await res.json();
+                    this.tokens = res.tokensstat;
+
+                    for (let token of this.tokens) {
+                        V.$set(this.balances, token.currency, {contract: token.contract, value: '0'});
+                    }
+                }
+            },
+            async fetchBalance(symbol) {
+                this.symbol = symbol;
+                let token = this.balances[symbol];
+                let result = await this.vexapi.getCurrencyBalance(token.contract, this.account);
+                let balance = '0';
+                if (result.length > 0) {
+                    balance = result[0].split(' ')[0];
+                }
+                this.balances[symbol].value = balance;
+            }
+        },
+        filters: {
+            date(value) {
+                return new Date(value).toLocaleString();
+            }
+        }
+    });
+</script>
+</body>
+</html>
