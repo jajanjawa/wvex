@@ -11,7 +11,7 @@
 <body class="lighten-1 grey">
 
 <div class="container" id="app">
-    <div class="row center z-depth-0"><img class="responsive-img" src="img/vex-logo.svg" alt="Vexanium"></div>
+    <div class="row center"><img class="responsive-img" src="img/vex-logo.svg" alt="Vexanium"></div>
 
     <div class="card-panel center">
         <h5>Penyimpanan</h5>
@@ -21,18 +21,19 @@
         </div>
         <button class="btn waves-effect waves-ripple" @click="save"><i class="material-icons">save</i></button>
         <button class="btn waves-effect waves-ripple" @click="unlock"><i class="material-icons">lock_open</i></button>
+        <button class="btn waves-effect waves-ripple red" @click="clearData"><i class="material-icons">delete</i></button>
     </div>
 
     <div class="card-panel center">
-        <h4>Impor Dompet</h4>
+        <h5>Impor Dompet</h5>
         <div class="input-field col s12 l8 offset-l2">
             <input id="wif" type="password" class="validate" v-model="wif">
             <label for="wif">Kunci Pribadi</label>
         </div>
-        <button class="btn waves-effect waves-ripple" @click="addWif"><i class="material-icons">add</i></button>
+        <button class="btn waves-effect waves-ripple" @click="addWif"><i class="material-icons">file_download</i></button>
     </div>
 
-    <h4>Dompet</h4>
+    <h5>Dompet</h5>
     <div class="card center" v-for="(it,key, index) in wallets" :key="key">
         <span class="card-title">{{key}}</span>
         <div class="card-content">
@@ -53,15 +54,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/rollups/aes.js"></script>
 
 <script>
-    function copyText(text) {
-        let textArea = document.createElement("textarea");
-        textArea.value = text;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        textArea.remove();
-    }
-
     function encrypt(payload = '', key = '') {
         let message = CryptoJS.AES.encrypt(payload, key);
         return message.toString();
@@ -91,10 +83,9 @@
         },
         methods: {
             async addWif() {
-                let pubKey = this.ecc.privateToPublic(this.wif);
-
                 try {
-                    let res = await this.vexapi.getKeyAccounts({public_key: pubKey});
+                    let pubKey = this.ecc.privateToPublic(this.wif);
+                    let res = await this.vexapi.getKeyAccounts(pubKey);
                     let account = res.account_names[0];
 
                     let vex = await this.vexapi.getCurrencyBalance('vex.token', account);
@@ -105,7 +96,7 @@
                     this.wif = '';
                 } catch (e) {
                     console.log(e);
-                    M.toast({html: 'terjadi kesalahan'});
+                    M.toast({html: e.message});
                 }
             },
             save() {
@@ -125,7 +116,7 @@
                 }
                 let raw = localStorage.getItem('wallets');
                 if (!raw) {
-                    M.toast({html: 'belum ada data dompet'});
+                    M.toast({html: 'belum pernah impor dompet'});
                     return;
                 }
                 try {
@@ -135,6 +126,12 @@
                 } catch (e) {
                     M.toast({html: 'sandi salah'});
                 }
+            },
+            clearData() {
+                localStorage.removeItem('wallets');
+                localStorage.removeItem('account');
+                sessionStorage.removeItem('pin');
+                M.toast({html: 'data dibersihkan'});
             },
             selectWallet(name) {
                 localStorage.setItem('account', name);
