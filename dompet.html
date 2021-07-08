@@ -103,13 +103,13 @@
             document.title = "Dompet Vexanium - " + this.account;
             this.sendModal = M.Modal.init(document.getElementById('send'));
 
-
-            this.vex = Eos({
+            let config = {
                 chainId: 'f9f432b1851b5c179d2091a96f593aaed50ec7466b74f89301f957a83e56ce1f',
-                httpEndpoint: 'http://209.97.162.124:8080',
-            });
+                httpEndpoint: 'https://api.vex.proit.id',
+            };
+            this.vex = Eos(config);
             this.vexapi = Eos.modules.api({
-                httpEndpoint: 'http://209.97.162.124:8080'
+                httpEndpoint: config.httpEndpoint
             });
 
             this.fetchTokens();
