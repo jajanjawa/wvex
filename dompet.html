@@ -114,6 +114,20 @@
 
             this.fetchTokens();
             this.fetchActions();
+            let query = new URLSearchParams(location.search);
+            if (query.has('to')) {
+                this.dest = query.get('to');
+            }
+            if (query.has('amount')) {
+                this.amount = query.get('amount');
+            }
+            if (query.has('symbol')) {
+                this.symbol = query.get('symbol');
+            }
+            if (query.has('memo')) {
+                this.memo = query.get('memo');
+            }
+
         },
         methods: {
             unlock() {
@@ -151,6 +165,9 @@
                     let txid = res.processed.id;
 
                     M.toast({html: 'berhasil dikirim'});
+                    this.dest = '';
+                    this.amount = '0';
+                    this.memo = '';
                 }).catch(e => {
                     console.log(e);
                     M.toast({html: 'terjadi kesalahan'});
