@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <title>Vexanium - Kirim</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link href="css/materials-icon.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="css/materialize.min.css" media="screen,projection"/>
+    <link rel="icon" href="img/vexanium.webp">
+</head>
+<body>
+<div class="container" id="app">
+    <div class="row center">
+        <div class="chip z-depth-1 waves-effect" @click="getWallet">{{wallet.account}}</div>
+    </div>
+    <div class="card center">
+        <div class="card-content">
+            <span class="card-title">Kirim</span>
+            <div class="input-field">
+                <input id="dest" type="text" maxlength="12" data-length="12" v-model="dest">
+                <label for="dest">Kepada</label>
+            </div>
+            <div class="input-field">
+                <input id="amount" type="number" v-model="amount">
+                <label for="amount">Jumlah Vex</label>
+            </div>
+            <div class="input-field">
+                <input id="memo" type="text" maxlength="255" data-length="255" v-model="memo">
+                <label for="memo">Memo</label>
+            </div>
+            <div class="input-field">
+                <input id="symbol" type="text" v-model="symbol">
+                <label for="symbol">Symbol</label>
+            </div>
+            <div class="input-field">
+                <input id="contract" type="text" v-model="contract">
+                <label for="contract">Nama Token Kontrak</label>
+            </div>
+
+        </div>
+        <div class="card-action right-align">
+            <button class="btn-flat waves-effect waves-ripple" @click="confirmSend"><i class="material-icons">send</i>
+            </button>
+        </div>
+    </div>
+
+    <div class="row">{{logger}}</div>
+</div>
+<script src="js/materialize.min.js"></script>
+<script src="js/vue.min.js"></script>
+<script src="js/vex.min.js"></script>
+<script src="js/pocket.vex.min.js"></script>
+<script>
+
+    const V = new Vue({
+        el: '#app',
+        data: {
+            vex: null,
+            wallet: {account: 'Fulan'},
+            dest: '',
+            amount: '0.001',
+            memo: '',
+            contract: 'vex.token',
+            symbol: 'VEX',
+            logger: ''
+        },
+        created() {
+            this.vex = Eos({
+                chainId: 'f9f432b1851b5c179d2091a96f593aaed50ec7466b74f89301f957a83e56ce1f',
+                httpEndpoint: 'https://explorer.vexanium.com:6960',
+            });
+        },
+        mounted() {
+            M.CharacterCounter.init(document.getElementById('dest'));
+            M.CharacterCounter.init(document.getElementById('memo'));
+            setTimeout(() => this.getWallet(), 1300);
+        },
+        methods: {
+            getWallet() {
+                pe.getWalletWithAccount().then(res => {
+                    if (res.code === 0) {
+                        this.wallet = res.data;
+                    } else {
+                        M.toast({html: 'belum berhasil baca dompet'});
+                    }
+                });
+            },
+            async confirmSend() {
+                const DecimalPad = Eos.modules.format.DecimalPad;
+                //todo tidak semua token 4 decimal
+                let amount = DecimalPad(this.amount, 4);
+                try {
+                    let data = {
+                        serialNumber: '2345',
+                        actions: [
+                            {
+                                account: this.contract,
+                                name: "transfer",
+                                authorization: [{
+                                    actor: this.wallet.account,
+                                    permission: "active"
+                                }],
+                                data: {
+                                    from: this.wallet.account,
+                                    to: this.dest,
+                                    quantity: `${amount} ${this.symbol}`,
+                                    memo: this.memo.trim()
+                                }
+                            },
+                        ]
+                    };
+
+                    let result = await pe.pushActions(data);
+                    this.logger += JSON.stringify(result);
+                    //todo push transaksi
+
+                    M.toast({html: 'berhasil'});
+                } catch (e) {
+                    this.logger += e.message;
+                    M.toast({html: e.message});
+                }
+            }
+        }
+    });
+
+</script>
+</body>
+</html>
