@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8"/>
+    <title>Vexanium - Akun Baru</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link href="css/materials-icon.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="css/materialize.min.css" media="screen,projection"/>
+    <link rel="icon" href="img/vexanium.webp">
+</head>
+<body>
+<div class="container" id="app">
+    <h5 class="center">Buat Kunci</h5>
+    <div class="row">
+        <div class="col s12">
+            Kunci Publik: <p class="green-text truncate">{{key.publicKey}}</p><br>
+            Kunci Pribadi: <p class="red-text truncate">{{key.wif}}</p>
+        </div>
+    </div>
+    <div class="row center">
+        <button ref="download" class="btn-flat waves-effect" @click="backup"><i
+                class="material-icons">cloud_download</i></button>
+        <button class="btn-flat waves-effect" @click="generate"><i class="material-icons">build</i></button>
+    </div>
+    <hr>
+    <h5 class="center">Akun Baru</h5>
+    <div class="row">
+        <div class="input-field">
+            <input id="name" type="text" maxlength="12" data-length="12" v-model="account">
+            <label for="name">Nama Akun</label>
+        </div>
+        <div class="input-field">
+            <input id="owner" type="text" :value="owner" disabled>
+            <label for="owner">Kunci @owner</label>
+        </div>
+        <div class="input-field">
+            <input id="active" type="text" :value="key.publicKey" disabled>
+            <label for="active">Kunci @active</label>
+        </div>
+    </div>
+    <div class="row center">
+        <button class="btn-flat waves-effect" @click="imOwner"><i class="material-icons">person</i>
+        </button>
+        <button class="btn-flat waves-effect" @click="findAccount"><i class="material-icons">find_in_page</i>
+        </button>
+        <button class="btn-flat waves-effect" @click="createAccount"><i class="material-icons">create</i></button>
+    </div>
+    <div class="row">{{logger}}</div>
+</div>
+<script src="js/materialize.min.js"></script>
+<script src="js/vue.min.js"></script>
+<script src="js/vex.min.js"></script>
+<script src="js/scatterjs-core.min.js"></script>
+<script src="js/scatterjs-plugin-vexjs.min.js"></script>
+<script>
+    function copyText(text) {
+        let textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+    }
+    const V = new Vue({
+        el: '#app',
+        data: {
+            owner: '',
+            account: '',
+            wallet: {},
+            key: {},
+            network: null,
+            vexnet: null,
+            logger: ''
+        },
+        created() {
+            ScatterJS.plugins(new ScatterEOS());
+            this.network = ScatterJS.Network.fromJson({
+                blockchain: 'eos',
+                chainId: 'f9f432b1851b5c179d2091a96f593aaed50ec7466b74f89301f957a83e56ce1f',
+                host: 'explorer.vexanium.com',
+                port: 6960,
+                protocol: 'https',
+            });
+        },
+        mounted() {
+            M.CharacterCounter.init(document.getElementById('name'));
+            setTimeout(() => this.getWallet(), 1300);
+        },
+        methods: {
+            async getWallet() {
+                let connected = await ScatterJS.scatter.connect('WVex');
+                if (!connected) {
+                    M.toast({html: 'belum tersambung dengan dompet'});
+                    return;
+                }
+                this.scatter = ScatterJS.scatter;
+                const requiredFields = {accounts: [this.network]};
+                await this.scatter.getIdentity(requiredFields);
+
+                let account = this.scatter.identity.accounts.find(account => account.blockchain === 'eos');
+                if (!account) {
+                    M.toast({html: 'belum ada akun'});
+                    return;
+                }
+                this.wallet = account;
+                this.vexnet = VexNet(this.network);
+            },
+            async generate() {
+                let ecc = Eos.modules.ecc;
+                let wif = await ecc.randomKey();
+                let publicKey = ecc.privateToPublic(wif);
+
+                this.key = {publicKey, wif};
+                this.owner = publicKey;
+                this.logger = JSON.stringify(this.key);
+                setTimeout(() => M.updateTextFields(), 70);
+            },
+            imOwner() {
+                if (Object.keys(this.wallet).length === 0) {
+                    this.getWallet();
+                    return;
+                }
+                this.owner = this.wallet.publicKey;
+                setTimeout(() => M.updateTextFields(), 70);
+            },
+            backup() {
+                if (!this.key.wif) {
+                    M.toast({html: 'silakan buat pasangan kunci dahulu'});
+                    return;
+                }
+
+                copyText(JSON.stringify(this.key));
+                M.toast({html: 'kunci disalin, silakan disimpan yang aman'});
+            },
+            findAccount() {
+                this.logger = '';
+                let vex = VexNet(this.network);
+                vex.getAccount({account_name: this.account}).then(res => {
+                    M.toast({html: `nama ${this.account} sudah terpakai`, displayLength: 2500});
+                }).catch(e => {
+                    let json = JSON.parse(e.message);
+                    if (json.code === 500) {
+                        M.toast({html: `nama ${this.account} tersedia`, displayLength: 2500});
+                    }
+                });
+            },
+            async createAccount() {
+                try {
+                    let trx = await this.createTrx();
+                    let result = await this.vexnet.pushTransaction(trx);
+                    this.logger = JSON.stringify(result);
+                    M.toast({html: 'berhasil'});
+                } catch (e) {
+                    this.logger = e.message;
+                    M.toast({html: 'terjadi kesalahan'});
+                }
+            },
+            async createTrx() {
+                let newAccount = this.account.toLocaleLowerCase();
+                let result = await this.vexnet.transaction(trx => {
+                    trx.newaccount({
+                        creator: this.wallet.name,
+                        name: newAccount,
+                        owner: this.owner,
+                        active: this.key.publicKey
+                    });
+                    trx.buyrambytes({
+                        payer: this.wallet.name,
+                        receiver: newAccount,
+                        bytes: 7168 // 7 * 1024
+                    });
+                    trx.delegatebw({
+                        from: this.wallet.name,
+                        receiver: newAccount,
+                        stake_net_quantity: '0.0030 VEX',
+                        stake_cpu_quantity: '0.0300 VEX',
+                        transfer: 0
+                    });
+                }, {broadcast: false, sign: true});
+                return result.transaction;
+            }
+        }
+    });
+</script>
+</body>
+</html>
