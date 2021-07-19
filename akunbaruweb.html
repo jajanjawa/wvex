@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8"/>
+    <title>Vexanium - Akun Baru</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link href="css/materials-icon.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="css/materialize.min.css" media="screen,projection"/>
+    <link rel="icon" href="img/vexanium.webp">
+</head>
+<body>
+<div class="container" id="app">
+    <h5 class="center">Buat Kunci</h5>
+    <div class="row">
+        <div class="col s12">
+            Kunci Publik: <p class="green-text truncate">{{key.publicKey}}</p><br>
+            Kunci Pribadi: <p class="red-text truncate">{{key.wif}}</p>
+        </div>
+    </div>
+    <div class="row center">
+        <button ref="download" class="btn-flat waves-effect" @click="backup"><i
+                class="material-icons">cloud_download</i></button>
+        <button class="btn-flat waves-effect" @click="generate"><i class="material-icons">build</i></button>
+    </div>
+    <hr>
+    <h5 class="center">Akun Baru</h5>
+    <div class="row">
+        <div class="input-field">
+            <input id="wif" type="password" v-model="payer.wif">
+            <label for="wif">Kunci Pribadi</label>
+        </div>
+        <div class="input-field">
+            <input id="name" type="text" maxlength="12" data-length="12" v-model="account">
+            <label for="name">Nama Akun</label>
+        </div>
+        <div class="input-field">
+            <input id="owner" type="text" :value="owner" disabled>
+            <label for="owner">Kunci @owner</label>
+        </div>
+        <div class="input-field">
+            <input id="active" type="text" :value="key.publicKey" disabled>
+            <label for="active">Kunci @active</label>
+        </div>
+    </div>
+    <div class="row center">
+        <button class="btn-flat waves-effect" @click="imOwner"><i class="material-icons">person</i>
+        </button>
+        <button class="btn-flat waves-effect" @click="findAccount"><i class="material-icons">find_in_page</i>
+        </button>
+        <button class="btn-flat waves-effect" @click="createAccount"><i class="material-icons">create</i></button>
+    </div>
+    <div class="row">
+        <div class="input-field col s12">
+            <textarea id="logarea" class="materialize-textarea">{{logger}}</textarea>
+            <label for="logarea">Logger</label>
+        </div>
+    </div>
+</div>
+<script src="js/materialize.min.js"></script>
+<script src="js/vue.min.js"></script>
+<script src="js/vex.min.js"></script>
+<script>
+    function copyText(text) {
+        let textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+    }
+
+    const V = new Vue({
+        el: '#app',
+        data: {
+            owner: '',
+            account: '',
+            key: {},
+            payer: {wif: ''},
+            vex: null,
+            logger: ''
+        },
+        created() {
+            this.vex = Eos({
+                chainId: 'f9f432b1851b5c179d2091a96f593aaed50ec7466b74f89301f957a83e56ce1f',
+                httpEndpoint: 'https://vexascan.com:8443',
+            });
+        },
+        mounted() {
+            M.CharacterCounter.init(document.getElementById('name'));
+        },
+        methods: {
+            updateField() {
+                M.updateTextFields();
+                M.textareaAutoResize(document.getElementById('logarea'));
+            },
+            async generate() {
+                let ecc = Eos.modules.ecc;
+                let wif = await ecc.randomKey();
+                let publicKey = ecc.privateToPublic(wif);
+
+                this.key = {publicKey, wif};
+                this.owner = publicKey;
+                this.logger = JSON.stringify(this.key);
+                setTimeout(this.updateField, 70);
+            },
+            imOwner() {
+                let publicKey = Eos.modules.ecc.privateToPublic(this.payer.wif);
+                this.owner = publicKey;
+                this.payer.publickKey = publicKey;
+                setTimeout(this.updateField, 70);
+            },
+            backup() {
+                if (!this.key.wif) {
+                    M.toast({html: 'silakan buat pasangan kunci dahulu'});
+                    return;
+                }
+
+                copyText(JSON.stringify(this.key));
+                M.toast({html: 'kunci disalin, silakan disimpan yang aman'});
+            },
+            findAccount() {
+                this.vex.getAccount(this.account).then(res => {
+                    M.toast({html: `nama ${this.account} sudah terpakai`, displayLength: 2500});
+                }).catch(e => {
+                    let json = JSON.parse(e.message);
+                    if (json.code === 500) {
+                        M.toast({html: `nama ${this.account} tersedia`, displayLength: 2500});
+                    }
+                });
+            },
+            async createAccount() {
+                try {
+                    let trx = await this.createTrx();
+                    let result = await this.vex.pushTransaction(trx);
+                    this.logger = JSON.stringify(result);
+                    setTimeout(this.updateField, 70);
+                    M.toast({html: 'berhasil'});
+                } catch (e) {
+                    this.logger = e.message;
+                    setTimeout(this.updateField, 70);
+                    M.toast({html: 'terjadi kesalahan'});
+                }
+            },
+            async createTrx() {
+                let publicKey = Eos.modules.ecc.privateToPublic(this.payer.wif);
+                let res = await this.vex.getKeyAccounts(publicKey);
+                let creator = res.account_names[0];
+
+                let newAccount = this.account.toLocaleLowerCase();
+                let result = await this.vex.transaction(trx => {
+                    trx.newaccount({
+                        creator,
+                        name: newAccount,
+                        owner: this.owner,
+                        active: this.key.publicKey
+                    });
+                    trx.buyrambytes({
+                        payer: creator,
+                        receiver: newAccount,
+                        bytes: 7168 // 7 * 1024
+                    });
+                    trx.delegatebw({
+                        from: creator,
+                        receiver: newAccount,
+                        stake_net_quantity: '0.0500 VEX',
+                        stake_cpu_quantity: '0.0500 VEX',
+                        transfer: 0
+                    });
+                }, {broadcast: false, sign: true, keyProvider: this.payer.wif});
+                return result.transaction;
+            }
+        }
+    });
+</script>
+</body>
+</html>
