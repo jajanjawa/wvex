@@ -1,4 +1,4 @@
-#### Dompet Vexanium
+#### Demo Vexanium
 
 [Sruput](https://jajanjawa.github.io/wvex/)
 
@@ -6,7 +6,9 @@
 - kunci pribadi dienkripsi 
 - transfer token
 - riwayat
+- buat akun
+- vote bp
 
 #### Link Pintasan
 
-[coba](https://jajanjawa.github.io/wvex/dompet.html?to=inijajanjawa&amount=9&memo=percobaan)
+[coba dompet](https://jajanjawa.github.io/wvex/dompet.html?to=wedangkopimu&amount=9&memo=percobaan)

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <title>Vexanium - Vote Block Producer</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link href="css/materials-icon.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="css/materialize.min.css" media="screen,projection"/>
+    <link rel="icon" href="img/vexanium.webp">
+</head>
+<body>
+
+<div class="container" id="app">
+    <div class="row center">
+        <div class="chip z-depth-1 waves-effect" v-for="(it, n) in producers" :key="n"
+             @click="pick(it)" :class="n > 20 ? 'red' : 'green'">{{n+1}}. {{it.owner}}
+        </div>
+    </div>
+
+    <div class="row center">
+        <div class="input-field">
+            <input id="bp" type="text" v-model="selected">
+            <label for="bp">Blok Produser</label>
+        </div>
+        <button class="btn waves-effect waves-ripple" @click="vote">Vote</button>
+    </div>
+
+</div>
+<script src="js/materialize.min.js"></script>
+<script src="js/vue.min.js"></script>
+<script src="js/vex.min.js"></script>
+<script src="js/scatterjs-core.min.js"></script>
+<script src="js/scatterjs-plugin-vexjs.min.js"></script>
+
+<script>
+    const V = new Vue({
+        el: '#app',
+        data: {
+            wallet: {},
+            producers: [],
+            voting: [],
+            selected: '',
+            network: null,
+            vexnet: null,
+        },
+        created() {
+            ScatterJS.plugins(new ScatterEOS());
+            this.network = ScatterJS.Network.fromJson({
+                blockchain: 'eos',
+                chainId: 'f9f432b1851b5c179d2091a96f593aaed50ec7466b74f89301f957a83e56ce1f',
+                host: 'explorer.vexanium.com',
+                port: 6960,
+                protocol: 'https',
+            });
+        },
+        mounted() {
+            this.getBP();
+            setTimeout(this.getWallet, 1300);
+        },
+        methods: {
+            async getWallet() {
+                let connected = await ScatterJS.scatter.connect('WVex');
+                if (!connected) {
+                    M.toast({html: 'belum tersambung dengan dompet'});
+                    return;
+                }
+                const scatter = ScatterJS.scatter;
+                const requiredFields = {accounts: [this.network]};
+                await scatter.getIdentity(requiredFields);
+
+                let account = scatter.identity.accounts.find(account => account.blockchain === 'eos');
+                if (!account) {
+                    M.toast({html: 'belum ada akun'});
+                    return;
+                }
+                this.wallet = account;
+                this.vexnet = VexNet(this.network);
+            },
+            async getBP() {
+                try {
+                    let res = await fetch('https://vexascan.com/api/custom/get_table_rows/vexcore/vexcore/producers/500');
+                    if (res.ok) {
+                        res = await res.json();
+                        let sorted = res.rows.sort((a, z) => {
+                            let av = Number.parseInt(a.total_votes);
+                            let zv = Number.parseInt(z.total_votes);
+                            return zv - av;
+                        });
+                        this.producers = sorted.slice(0, 50);
+                    }
+                } catch (e) {
+                    M.toast({html: e.message});
+                }
+            },
+            pick(bp) {
+                let n = this.voting.findIndex((it) => it === bp.owner);
+                if (n === -1) {
+                    this.voting.push(bp.owner);
+                } else {
+                    this.voting.splice(n, 1);
+                }
+                this.selected = this.voting.join(',');
+                setTimeout(M.updateTextFields, 70);
+            },
+            async vote() {
+                let vote = this.selected.split(',');
+                try {
+                    await this.vexnet.voteproducer(this.wallet.name, '', vote);
+                    M.toast({html: 'berhasil'});
+                } catch (e) {
+                    M.toast({html: e.message});
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>
