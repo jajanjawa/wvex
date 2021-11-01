@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <title>Vexanium - Panen</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link href="css/materials-icon.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="css/materialize.min.css" media="screen,projection"/>
+    <link rel="icon" href="img/vexanium.webp">
+</head>
+<body>
+<div class="container" id="app">
+    <div class="row center">
+        <div class="chip z-depth-1 waves-effect" @click="getWallet">{{wallet.name}}</div>
+    </div>
+    <div class="card center">
+        <div class="card-content">
+            <span class="card-title">Panen</span>
+            <div class="input-field">
+                <input id="contract" type="text" maxlength="12" data-length="12" v-model="contract">
+                <label for="contract">Alamat Kontrak</label>
+            </div>
+            <div class="input-field">
+                <input id="symbol" type="text" v-model="symbol">
+                <label for="symbol">Pool</label>
+            </div>
+        </div>
+        <div class="card-action right-align">
+            <button class="btn-flat waves-effect waves-ripple" @click="harvest">Panen</button>
+        </div>
+    </div>
+
+    <div class="row">{{logger}}</div>
+</div>
+<script src="js/materialize.min.js"></script>
+<script src="js/vue.min.js"></script>
+<script src="js/vex.min.js"></script>
+<script src="js/scatterjs-core.min.js"></script>
+<script src="js/scatterjs-plugin-vexjs.min.js"></script>
+<script>
+
+    const V = new Vue({
+        el: '#app',
+        data: {
+            network: null,
+            scatter: null,
+            wallet: {name: 'Fulan'},
+            contract: '',
+            symbol: 'VEX',
+            logger: ''
+        },
+        created() {
+            ScatterJS.plugins(new ScatterEOS());
+            this.network = ScatterJS.Network.fromJson({
+                blockchain: 'eos',
+                chainId: 'f9f432b1851b5c179d2091a96f593aaed50ec7466b74f89301f957a83e56ce1f',
+                host: 'explorer.vexanium.com',
+                port: 6960,
+                protocol: 'https',
+            });
+        },
+        mounted() {
+            M.CharacterCounter.init(document.getElementById('contract'));
+            setTimeout(() => this.getWallet(), 1400);
+        },
+        methods: {
+            async getWallet() {
+                let connected = await ScatterJS.scatter.connect('WVex');
+                if (!connected) {
+                    M.toast({html: 'belum tersambung dengan dompet'});
+                    return;
+                }
+                this.scatter = ScatterJS.scatter;
+                const requiredFields = {accounts: [this.network]};
+                await this.scatter.getIdentity(requiredFields);
+
+                let account = this.scatter.identity.accounts.find(account => account.blockchain === 'eos');
+                if (!account) {
+                    M.toast({html: 'belum ada akun'});
+                    return;
+                }
+                this.logger = JSON.stringify(account);
+                this.wallet = account;
+            },
+            async harvest() {
+                let vexnet = VexNet(this.network);
+                let account = this.wallet;
+                let options = {authorization: `${account.name}@${account.authority}`};
+                try {
+                    let sc = await vexnet.contract(this.contract);
+                    let result = await sc.claim(account.name, this.symbol, options);
+
+                    this.logger = JSON.stringify(result);
+
+                    M.toast({html: 'berhasil'});
+                } catch (e) {
+                    this.logger += e.message;
+                    M.toast({html: e.message});
+                }
+            }
+        }
+    });
+
+</script>
+</body>
+</html>
